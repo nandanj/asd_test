@@ -1,0 +1,144 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: kafka-streams-aggregator-template
+objects:
+  - apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: ${SERVICE_ACCOUNT}
+      labels:
+        app: '${APPLICATION_NAME}'
+  - apiVersion: build.openshift.io/v1
+    kind: BuildConfig
+    metadata:
+      labels:
+        app: '${APPLICATION_NAME}'
+      name: '${APPLICATION_NAME}-bc'
+    spec:
+      failedBuildsHistoryLimit: 5
+      nodeSelector: {}
+      output:
+        to:
+          kind: ImageStreamTag
+          name: '${APPLICATION_NAME}:latest'
+      resources: {}
+      runPolicy: Serial
+      source:
+        git:
+          uri: ${GIT_URL}
+          ref: ${GIT_REF}
+        contextDir: ${CONTEXT_DIR}  
+        type: Git
+      strategy:
+        sourceStrategy:
+          from:
+            kind: ImageStreamTag
+            name: '${S2I_BUILDER_IMAGE}'
+            namespace: '${S2I_BUILDER_IMAGE_NAMESPACE}'
+        type: Source
+      successfulBuildsHistoryLimit: 5
+      triggers: []
+  - apiVersion: image.openshift.io/v1
+    kind: ImageStream
+    metadata:
+      name: '${APPLICATION_NAME}'
+      labels:
+        app: '${APPLICATION_NAME}'
+    spec: {}
+  - apiVersion: apps.openshift.io/v1
+    kind: DeploymentConfig
+    metadata:
+      labels:
+        app: '${APPLICATION_NAME}'
+      name: '${APPLICATION_NAME}'
+    spec:
+      replicas: 1
+      revisionHistoryLimit: 2
+      strategy:
+        activeDeadlineSeconds: 21600
+        resources: {}
+        rollingParams:
+          intervalSeconds: 1
+          maxSurge: 25%
+          maxUnavailable: 25%
+          timeoutSeconds: 3600
+          updatePeriodSeconds: 1
+        type: Rolling
+      template:
+        metadata:
+          labels:
+            app: '${APPLICATION_NAME}'
+        spec:
+          containers:
+            - env:
+                - name: QUARKUS_KAFKA_STREAMS_BOOTSTRAP_SERVERS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: '${APPLICATION_CONFIGMAP}'
+                      key: kafka-bootstrap-servers
+              image: '${APPLICATION_NAME}'
+              imagePullPolicy: IfNotPresent
+              name: '${APPLICATION_NAME}'
+              resources:
+                limits:
+                  cpu: '${RESOURCES_LIMITS_CPU}'
+                  memory: '${RESOURCES_LIMITS_MEMORY}'
+                requests:
+                  cpu: '${RESOURCES_REQUESTS_CPU}'
+                  memory: '${RESOURCES_REQUESTS_MEMORY}'
+              securityContext:
+                privileged: false
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          schedulerName: default-scheduler
+          securityContext: {}
+          serviceAccount: ${SERVICE_ACCOUNT}
+          serviceAccountName: ${SERVICE_ACCOUNT}
+          terminationGracePeriodSeconds: 30
+      triggers:
+        - type: ConfigChange
+        - imageChangeParams:
+            automatic: true
+            containerNames:
+              - ${APPLICATION_NAME}
+            from:
+              kind: ImageStreamTag
+              name: "${APPLICATION_NAME}:latest"
+              namespace: ${NAMESPACE}
+          type: ImageChange
+parameters:
+  - name: APPLICATION_NAME
+    required: true
+    value: kafka-streams-aggregator
+  - name: SERVICE_ACCOUNT
+    required: true
+    value: kafka-streams-aggregator
+  - name: GIT_URL
+    required: true
+  - name: GIT_REF
+    required: true
+    value: master
+  - name: CONTEXT_DIR
+    required: true
+    value: kafka-streams-aggregator
+  - name: S2I_BUILDER_IMAGE
+    required: true
+    value: openjdk18-openshift:1.8
+  - name: S2I_BUILDER_IMAGE_NAMESPACE
+    required: true
+    value: openshift
+  - name: APPLICATION_CONFIGMAP
+    required: true
+  - name: RESOURCES_LIMITS_CPU
+    value: '500m'
+  - name: RESOURCES_LIMITS_MEMORY
+    value: '500Mi'
+  - name: RESOURCES_REQUESTS_CPU
+    value: '100m'
+  - name: RESOURCES_REQUESTS_MEMORY
+    value: '200Mi'
+  - name: NAMESPACE
+    required: true
