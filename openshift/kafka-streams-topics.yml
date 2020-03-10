@@ -1,0 +1,36 @@
+---
+apiVersion: kafka.strimzi.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: temperature-values
+  labels:
+    strimzi.io/cluster: kafka-cluster
+spec:
+  partitions: 15
+  replicas: 3
+  config: {}
+
+---
+apiVersion: kafka.strimzi.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: weather-stations
+  labels:
+    strimzi.io/cluster: kafka-cluster
+spec:
+  partitions: 15
+  replicas: 3
+  config: {}
+
+---
+apiVersion: kafka.strimzi.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: temperatures-aggregated
+  labels:
+    strimzi.io/cluster: kafka-cluster
+spec:
+  partitions: 15
+  replicas: 3
+  config: {}
+
