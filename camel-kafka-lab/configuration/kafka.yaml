@@ -1,0 +1,55 @@
+apiVersion: kafka.strimzi.io/v1beta1
+kind: Kafka
+metadata:
+  name: my-cluster
+  labels:
+    app: my-cluster
+spec:
+  kafka:
+    replicas: 3
+    listeners:
+      external:
+        type: route
+    storage:
+      type: ephemeral
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 700m
+    readinessProbe:
+      initialDelaySeconds: 60
+      timeoutSeconds: 5
+    livenessProbe:
+      initialDelaySeconds: 60
+      timeoutSeconds: 5
+  zookeeper:
+    replicas: 3
+    storage:
+      type: ephemeral
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 200m
+      limits:
+        memory: 2Gi
+        cpu: 500m
+  entityOperator:
+    topicOperator:
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+         memory: 2Gi
+          cpu: 500m
+    userOperator:
+      resources:
+        requests:
+          memory: 512Mi
+          cpu: 200m
+        limits:
+          memory: 2Gi
+          cpu: 500m
