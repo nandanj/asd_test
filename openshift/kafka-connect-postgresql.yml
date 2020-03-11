@@ -1,0 +1,173 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: postgresql-persistent
+objects:
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: ${POSTGRESQL_CREDENTIALS_SECRET}
+  stringData:
+    database-user: '${POSTGRESQL_USER}'
+    database-password: '${POSTGRESQL_PASSWORD}'
+    database-name: '${POSTGRESQL_DATABASE}'
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: ${POSTGRESQL_APPLICATION_NAME}
+    annotations:
+      template.openshift.io/expose-uri: postgres://{.spec.clusterIP}:{.spec.ports[?(.name=="postgresql")].port}
+    labels:
+      app: ${POSTGRESQL_APPLICATION_NAME}
+  spec:
+    ports:
+    - name: postgresql
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+      nodePort: 0
+    selector:
+      name: ${POSTGRESQL_APPLICATION_NAME}
+    type: ClusterIP
+    sessionAffinity: None
+  status:
+    loadBalancer: {}
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: ${POSTGRESQL_APPLICATION_NAME}
+    labels:
+      app: ${POSTGRESQL_APPLICATION_NAME}
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${POSTGRESQL_PV_CAPACITY}
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: ${POSTGRESQL_APPLICATION_NAME}
+    labels:
+      app: ${POSTGRESQL_APPLICATION_NAME}
+  spec:
+    strategy:
+      recreateParams:
+        timeoutSeconds: 600
+      resources: {}
+      type: Recreate
+    triggers:
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+        - postgresql
+        from:
+          kind: ImageStreamTag
+          name: postgresql:${POSTGRESQL_VERSION}
+          namespace: ${POSTGRESQL_IS_NAMESPACE}
+        lastTriggeredImage: ''
+    - type: ConfigChange
+    replicas: 1
+    selector:
+      name: ${POSTGRESQL_APPLICATION_NAME}
+    template:
+      metadata:
+        labels:
+          name: ${POSTGRESQL_APPLICATION_NAME}
+          app: ${POSTGRESQL_APPLICATION_NAME}
+      spec:
+        containers:
+        - name: postgresql
+          image: " "
+          ports:
+          - containerPort: 5432
+            protocol: TCP
+          readinessProbe:
+            timeoutSeconds: 1
+            initialDelaySeconds: 5
+            exec:
+              command:
+              - "/bin/sh"
+              - "-i"
+              - "-c"
+              - psql -h 127.0.0.1 -U ${POSTGRESQL_USER} -q -d ${POSTGRESQL_DATABASE} -c
+                'SELECT 1'
+          livenessProbe:
+            timeoutSeconds: 1
+            initialDelaySeconds: 30
+            tcpSocket:
+              port: 5432
+          env:
+          - name: POSTGRESQL_USER
+            valueFrom:
+              secretKeyRef:
+                name: ${POSTGRESQL_CREDENTIALS_SECRET}
+                key: database-user
+          - name: POSTGRESQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: ${POSTGRESQL_CREDENTIALS_SECRET}
+                key: database-password
+          - name: POSTGRESQL_DATABASE
+            valueFrom:
+              secretKeyRef:
+                name: ${POSTGRESQL_CREDENTIALS_SECRET}
+                key: database-name
+          - name: POSTGRESQL_SERVICE
+            value: ${POSTGRESQL_APPLICATION_NAME}
+          - name: POSTGRESQL_MAX_PREPARED_TRANSACTIONS
+            value: '${POSTGRESQL_MAX_PREPARED_TRANSACTIONS}'
+          - name: POSTGRESQL_MAX_CONNECTIONS
+            value: '${POSTGRESQL_MAX_CONNECTIONS}'
+          resources:
+            requests:
+              cpu: '${POSTGRESQL_REQUESTS_CPU}'
+              memory: '${POSTGRESQL_REQUESTS_MEMORY}'
+            limits:
+              cpu: '${POSTGRESQL_LIMITS_CPU}'
+              memory: '${POSTGRESQL_LIMITS_MEMORY}'
+          volumeMounts:
+          - name: "${POSTGRESQL_APPLICATION_NAME}-data"
+            mountPath: "/var/lib/pgsql/data"
+          terminationMessagePath: "/dev/termination-log"
+          imagePullPolicy: IfNotPresent
+          capabilities: {}
+          securityContext:
+            capabilities: {}
+            privileged: false
+        volumes:
+        - name: "${POSTGRESQL_APPLICATION_NAME}-data"
+          persistentVolumeClaim:
+            claimName: "${POSTGRESQL_APPLICATION_NAME}"
+        restartPolicy: Always
+        dnsPolicy: ClusterFirst
+parameters:
+- name: POSTGRESQL_APPLICATION_NAME
+  value: postgresql
+- name: POSTGRESQL_MAX_PREPARED_TRANSACTIONS
+  value: '100'
+- name: POSTGRESQL_MAX_CONNECTIONS 
+  value: '100'
+- name: POSTGRESQL_REQUESTS_CPU
+  value: 100m
+- name: POSTGRESQL_REQUESTS_MEMORY
+  value: 256Mi
+- name: POSTGRESQL_LIMITS_CPU
+  value: 500m
+- name: POSTGRESQL_LIMITS_MEMORY
+  value: 512Mi
+- name: POSTGRESQL_CREDENTIALS_SECRET
+  value: postgresql
+- name: POSTGRESQL_USER
+  value: postgresuser
+- name: POSTGRESQL_PASSWORD
+  value: postgrespw
+- name: POSTGRESQL_DATABASE
+  value: inventory
+- name: POSTGRESQL_PV_CAPACITY
+  value: 5Gi
+- name: POSTGRESQL_VERSION
+  value: '9.6'
+- name: POSTGRESQL_IS_NAMESPACE
+  value: openshift
