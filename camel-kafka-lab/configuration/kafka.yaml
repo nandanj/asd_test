@@ -8,6 +8,10 @@ spec:
   kafka:
     replicas: 3
     listeners:
+      plain: {}
+      tls:
+        authentication:
+          type: tls
       external:
         type: route
     storage:
