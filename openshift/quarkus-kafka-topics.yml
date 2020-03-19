@@ -1,0 +1,11 @@
+---
+apiVersion: kafka.strimzi.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: quarkus-stocks
+  labels:
+    strimzi.io/cluster: kafka-cluster
+spec:
+  partitions: 15
+  replicas: 3
+  config: {}
